@@ -356,11 +356,20 @@ fn validate_jwt_signature(jwt: &JWT, key: Rsa<Public>) -> JWTResult<()> {
     }
 }
 
+/// Internal helper enum for PartialClaims that supports single or
+/// multiple audiences
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Audience {
+    Single(String),
+    Multi(Vec<String>)
+}
+
 /// Internal helper struct for claims that are relevant for claim
 /// validations.
 #[derive(Deserialize)]
 struct PartialClaims {
-    aud: Option<String>,
+    aud: Option<Audience>,
     iss: Option<String>,
     sub: Option<String>,
     exp: Option<u64>,
@@ -388,7 +397,12 @@ fn apply_validation(claims: &PartialClaims,
         Validation::Audience(aud) => {
             match claims.aud {
                 None => Err("'aud' claim is missing"),
-                Some(ref claim) => if *claim == aud {
+                Some(Audience::Single(ref claim)) => if *claim == aud {
+                    Ok(())
+                } else {
+                    Err("'aud' claim does not match")
+                },
+                Some(Audience::Multi(ref claims)) => if claims.contains(&aud) {
                     Ok(())
                 } else {
                     Err("'aud' claim does not match")
